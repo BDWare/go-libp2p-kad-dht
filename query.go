@@ -125,10 +125,6 @@ func newQueryRunner(q *dhtQuery) *dhtQueryRunner {
 }
 
 func (r *dhtQueryRunner) Run(ctx context.Context, peers []peer.ID) (*dhtQueryResult, error) {
-	// Make sure to clean everything up when we return from this function.
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
 	r.log = logger
 	r.runCtx = ctx
 

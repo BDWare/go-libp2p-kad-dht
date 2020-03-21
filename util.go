@@ -4,6 +4,7 @@ package dht
 var PoolSize = 6
 
 // K is the maximum number of requests to perform before returning failure.
+// var KValue = 20
 var KValue = 20
 
 // Alpha is the concurrency factor for asynchronous requests.

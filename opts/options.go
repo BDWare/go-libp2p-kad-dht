@@ -2,12 +2,11 @@ package dhtopts
 
 import (
 	"fmt"
-	"time"
 
 	ds "github.com/ipfs/go-datastore"
 	dssync "github.com/ipfs/go-datastore/sync"
-	"github.com/libp2p/go-libp2p-core/protocol"
-	"github.com/libp2p/go-libp2p-record"
+	protocol "github.com/libp2p/go-libp2p-core/protocol"
+	record "github.com/libp2p/go-libp2p-record"
 )
 
 // Deprecated: The old format did not support more than one message per stream, and is not supported
@@ -21,21 +20,10 @@ var (
 
 // Options is a structure containing all the options that can be used when constructing a DHT.
 type Options struct {
-	Datastore       ds.Batching
-	Validator       record.Validator
-	Client          bool
-	Protocols       []protocol.ID
-	BucketSize      int
-	MaxRecordAge    time.Duration
-	EnableProviders bool
-	EnableValues    bool
-
-	RoutingTable struct {
-		RefreshQueryTimeout time.Duration
-		RefreshPeriod       time.Duration
-		AutoRefresh         bool
-		LatencyTolerance    time.Duration
-	}
+	Datastore ds.Batching
+	Validator record.Validator
+	Client    bool
+	Protocols []protocol.ID
 }
 
 // Apply applies the given options to this Option
@@ -59,47 +47,7 @@ var Defaults = func(o *Options) error {
 	}
 	o.Datastore = dssync.MutexWrap(ds.NewMapDatastore())
 	o.Protocols = DefaultProtocols
-	o.EnableProviders = true
-	o.EnableValues = true
-
-	o.RoutingTable.LatencyTolerance = time.Minute
-	o.RoutingTable.RefreshQueryTimeout = 10 * time.Second
-	o.RoutingTable.RefreshPeriod = 1 * time.Hour
-	o.RoutingTable.AutoRefresh = true
-	o.MaxRecordAge = time.Hour * 36
-
 	return nil
-}
-
-// RoutingTableLatencyTolerance sets the maximum acceptable latency for peers
-// in the routing table's cluster.
-func RoutingTableLatencyTolerance(latency time.Duration) Option {
-	return func(o *Options) error {
-		o.RoutingTable.LatencyTolerance = latency
-		return nil
-	}
-}
-
-// RoutingTableRefreshQueryTimeout sets the timeout for routing table refresh
-// queries.
-func RoutingTableRefreshQueryTimeout(timeout time.Duration) Option {
-	return func(o *Options) error {
-		o.RoutingTable.RefreshQueryTimeout = timeout
-		return nil
-	}
-}
-
-// RoutingTableRefreshPeriod sets the period for refreshing buckets in the
-// routing table. The DHT will refresh buckets every period by:
-//
-// 1. First searching for nearby peers to figure out how many buckets we should try to fill.
-// 1. Then searching for a random key in each bucket that hasn't been queried in
-//    the last refresh period.
-func RoutingTableRefreshPeriod(period time.Duration) Option {
-	return func(o *Options) error {
-		o.RoutingTable.RefreshPeriod = period
-		return nil
-	}
 }
 
 // Datastore configures the DHT to use the specified datastore.
@@ -156,66 +104,6 @@ func NamespacedValidator(ns string, v record.Validator) Option {
 func Protocols(protocols ...protocol.ID) Option {
 	return func(o *Options) error {
 		o.Protocols = protocols
-		return nil
-	}
-}
-
-// BucketSize configures the bucket size of the routing table.
-//
-// The default value is 20.
-func BucketSize(bucketSize int) Option {
-	return func(o *Options) error {
-		o.BucketSize = bucketSize
-		return nil
-	}
-}
-
-// MaxRecordAge specifies the maximum time that any node will hold onto a record ("PutValue record")
-// from the time its received. This does not apply to any other forms of validity that
-// the record may contain.
-// For example, a record may contain an ipns entry with an EOL saying its valid
-// until the year 2020 (a great time in the future). For that record to stick around
-// it must be rebroadcasted more frequently than once every 'MaxRecordAge'
-func MaxRecordAge(maxAge time.Duration) Option {
-	return func(o *Options) error {
-		o.MaxRecordAge = maxAge
-		return nil
-	}
-}
-
-// DisableAutoRefresh completely disables 'auto-refresh' on the DHT routing
-// table. This means that we will neither refresh the routing table periodically
-// nor when the routing table size goes below the minimum threshold.
-func DisableAutoRefresh() Option {
-	return func(o *Options) error {
-		o.RoutingTable.AutoRefresh = false
-		return nil
-	}
-}
-
-// DisableProviders disables storing and retrieving provider records.
-//
-// Defaults to enabled.
-//
-// WARNING: do not change this unless you're using a forked DHT (i.e., a private
-// network and/or distinct DHT protocols with the `Protocols` option).
-func DisableProviders() Option {
-	return func(o *Options) error {
-		o.EnableProviders = false
-		return nil
-	}
-}
-
-// DisableProviders disables storing and retrieving value records (including
-// public keys).
-//
-// Defaults to enabled.
-//
-// WARNING: do not change this unless you're using a forked DHT (i.e., a private
-// network and/or distinct DHT protocols with the `Protocols` option).
-func DisableValues() Option {
-	return func(o *Options) error {
-		o.EnableValues = false
 		return nil
 	}
 }

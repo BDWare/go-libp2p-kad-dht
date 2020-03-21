@@ -18,26 +18,27 @@ import (
 	"go.opencensus.io/tag"
 	"golang.org/x/xerrors"
 
+	proto "github.com/gogo/protobuf/proto"
+	cid "github.com/ipfs/go-cid"
+	ds "github.com/ipfs/go-datastore"
+	logging "github.com/ipfs/go-log"
+	goprocess "github.com/jbenet/goprocess"
+	goprocessctx "github.com/jbenet/goprocess/context"
 	"github.com/libp2p/go-libp2p-kad-dht/metrics"
 	opts "github.com/libp2p/go-libp2p-kad-dht/opts"
 	pb "github.com/libp2p/go-libp2p-kad-dht/pb"
-	"github.com/libp2p/go-libp2p-kad-dht/providers"
-
-	"github.com/gogo/protobuf/proto"
-	ds "github.com/ipfs/go-datastore"
-	logging "github.com/ipfs/go-log"
-	"github.com/jbenet/goprocess"
-	goprocessctx "github.com/jbenet/goprocess/context"
+	providers "github.com/libp2p/go-libp2p-kad-dht/providers"
 	kb "github.com/libp2p/go-libp2p-kbucket"
 	record "github.com/libp2p/go-libp2p-record"
 	recpb "github.com/libp2p/go-libp2p-record/pb"
-	"github.com/multiformats/go-base32"
-	"github.com/multiformats/go-multihash"
+	base32 "github.com/whyrusleeping/base32"
 )
 
 var logger = logging.Logger("dht")
 
-const BaseConnMgrScore = 5
+// NumBootstrapQueries defines the number of random dht queries to do to
+// collect members of the routing table.
+const NumBootstrapQueries = 5
 
 // IpfsDHT is an implementation of Kademlia with S/Kademlia modifications.
 // It is used to implement the base Routing module.
@@ -49,8 +50,7 @@ type IpfsDHT struct {
 	datastore ds.Datastore // Local data
 
 	routingTable *kb.RoutingTable // Array of routing tables for differently distanced nodes
-	// ProviderManager stores & manages the provider records for this Dht peer.
-	ProviderManager *providers.ProviderManager
+	providers    *providers.ProviderManager
 
 	birth time.Time // When this peer started up
 
@@ -67,20 +67,6 @@ type IpfsDHT struct {
 	stripedPutLocks [256]sync.Mutex
 
 	protocols []protocol.ID // DHT protocols
-
-	bucketSize int
-
-	autoRefresh           bool
-	rtRefreshQueryTimeout time.Duration
-	rtRefreshPeriod       time.Duration
-	triggerRtRefresh      chan chan<- error
-
-	maxRecordAge time.Duration
-
-	// Allows disabling dht subsystems. These should _only_ be set on
-	// "forked" DHTs (e.g., DHTs with custom protocols and/or private
-	// networks).
-	enableProviders, enableValues bool
 }
 
 // Assert that IPFS assumptions about interfaces aren't broken. These aren't a
@@ -96,23 +82,21 @@ var (
 // New creates a new DHT with the specified host and options.
 func New(ctx context.Context, h host.Host, options ...opts.Option) (*IpfsDHT, error) {
 	var cfg opts.Options
-	cfg.BucketSize = KValue
 	if err := cfg.Apply(append([]opts.Option{opts.Defaults}, options...)...); err != nil {
 		return nil, err
 	}
-	dht := makeDHT(ctx, h, &cfg)
-	dht.autoRefresh = cfg.RoutingTable.AutoRefresh
-	dht.rtRefreshPeriod = cfg.RoutingTable.RefreshPeriod
-	dht.rtRefreshQueryTimeout = cfg.RoutingTable.RefreshQueryTimeout
-
-	dht.maxRecordAge = cfg.MaxRecordAge
-	dht.enableProviders = cfg.EnableProviders
-	dht.enableValues = cfg.EnableValues
+	dht := makeDHT(ctx, h, cfg.Datastore, cfg.Protocols)
 
 	// register for network notifs.
 	dht.host.Network().Notify((*netNotifiee)(dht))
 
-	dht.proc.AddChild(dht.ProviderManager.Process())
+	dht.proc = goprocessctx.WithContextAndTeardown(ctx, func() error {
+		// remove ourselves from network notifs.
+		dht.host.Network().StopNotify((*netNotifiee)(dht))
+		return nil
+	})
+
+	dht.proc.AddChild(dht.providers.Process())
 	dht.Validator = cfg.Validator
 
 	if !cfg.Client {
@@ -120,7 +104,6 @@ func New(ctx context.Context, h host.Host, options ...opts.Option) (*IpfsDHT, er
 			h.SetStreamHandler(p, dht.handleNewStream)
 		}
 	}
-	dht.startRefreshing()
 	return dht, nil
 }
 
@@ -147,84 +130,34 @@ func NewDHTClient(ctx context.Context, h host.Host, dstore ds.Batching) *IpfsDHT
 	return dht
 }
 
-func makeDHT(ctx context.Context, h host.Host, cfg *opts.Options) *IpfsDHT {
-	self := kb.ConvertPeerID(h.ID())
-	rt := kb.NewRoutingTable(cfg.BucketSize, self, cfg.RoutingTable.LatencyTolerance, h.Peerstore())
+func makeDHT(ctx context.Context, h host.Host, dstore ds.Batching, protocols []protocol.ID) *IpfsDHT {
+	rt := kb.NewRoutingTable(KValue, kb.ConvertPeerID(h.ID()), time.Minute, h.Peerstore())
+
 	cmgr := h.ConnManager()
-
 	rt.PeerAdded = func(p peer.ID) {
-		commonPrefixLen := kb.CommonPrefixLen(self, kb.ConvertPeerID(p))
-		cmgr.TagPeer(p, "kbucket", BaseConnMgrScore+commonPrefixLen)
+		cmgr.TagPeer(p, "kbucket", 5)
 	}
-
 	rt.PeerRemoved = func(p peer.ID) {
 		cmgr.UntagPeer(p, "kbucket")
 	}
 
 	dht := &IpfsDHT{
-		datastore:        cfg.Datastore,
-		self:             h.ID(),
-		peerstore:        h.Peerstore(),
-		host:             h,
-		strmap:           make(map[peer.ID]*messageSender),
-		birth:            time.Now(),
-		routingTable:     rt,
-		protocols:        cfg.Protocols,
-		bucketSize:       cfg.BucketSize,
-		triggerRtRefresh: make(chan chan<- error),
+		datastore:    dstore,
+		self:         h.ID(),
+		peerstore:    h.Peerstore(),
+		host:         h,
+		strmap:       make(map[peer.ID]*messageSender),
+		ctx:          ctx,
+		providers:    providers.NewProviderManager(ctx, h.ID(), dstore),
+		birth:        time.Now(),
+		routingTable: rt,
+		protocols:    protocols,
 	}
 
-	// create a DHT proc with the given teardown
-	dht.proc = goprocess.WithTeardown(func() error {
-		// remove ourselves from network notifs.
-		dht.host.Network().StopNotify((*netNotifiee)(dht))
-		return nil
-	})
-
-	// create a tagged context derived from the original context
-	ctxTags := dht.newContextWithLocalTags(ctx)
-	// the DHT context should be done when the process is closed
-	dht.ctx = goprocessctx.WithProcessClosing(ctxTags, dht.proc)
-
-	dht.ProviderManager = providers.NewProviderManager(dht.ctx, h.ID(), cfg.Datastore)
+	dht.ctx = dht.newContextWithLocalTags(ctx)
 
 	return dht
 }
-
-// TODO Implement RT seeding as described in https://github.com/libp2p/go-libp2p-kad-dht/pull/384#discussion_r320994340 OR
-// come up with an alternative solution.
-// issue is being tracked at https://github.com/libp2p/go-libp2p-kad-dht/issues/387
-/*func (dht *IpfsDHT) rtRecovery(proc goprocess.Process) {
-	writeResp := func(errorChan chan error, err error) {
-		select {
-		case <-proc.Closing():
-		case errorChan <- errChan:
-		}
-		close(errorChan)
-	}
-
-	for {
-		select {
-		case req := <-dht.rtRecoveryChan:
-			if dht.routingTable.Size() == 0 {
-				logger.Infof("rt recovery proc: received request with reqID=%s, RT is empty. initiating recovery", req.id)
-				// TODO Call Seeder with default bootstrap peers here once #383 is merged
-				if dht.routingTable.Size() > 0 {
-					logger.Infof("rt recovery proc: successfully recovered RT for reqID=%s, RT size is now %d", req.id, dht.routingTable.Size())
-					go writeResp(req.errorChan, nil)
-				} else {
-					logger.Errorf("rt recovery proc: failed to recover RT for reqID=%s, RT is still empty", req.id)
-					go writeResp(req.errorChan, errors.New("RT empty after seed attempt"))
-				}
-			} else {
-				logger.Infof("rt recovery proc: RT is not empty, no need to act on request with reqID=%s", req.id)
-				go writeResp(req.errorChan, nil)
-			}
-		case <-proc.Closing():
-			return
-		}
-	}
-}*/
 
 // putValueToPeer stores the given key/value pair at the peer 'p'
 func (dht *IpfsDHT) putValueToPeer(ctx context.Context, p peer.ID, rec *recpb.Record) error {
@@ -379,11 +312,11 @@ func (dht *IpfsDHT) findPeerSingle(ctx context.Context, p peer.ID, id peer.ID) (
 	}
 }
 
-func (dht *IpfsDHT) findProvidersSingle(ctx context.Context, p peer.ID, key multihash.Multihash) (*pb.Message, error) {
-	eip := logger.EventBegin(ctx, "findProvidersSingle", p, multihashLoggableKey(key))
+func (dht *IpfsDHT) findProvidersSingle(ctx context.Context, p peer.ID, key cid.Cid) (*pb.Message, error) {
+	eip := logger.EventBegin(ctx, "findProvidersSingle", p, key)
 	defer eip.Done()
 
-	pmes := pb.NewMessage(pb.Message_GET_PROVIDERS, key, 0)
+	pmes := pb.NewMessage(pb.Message_GET_PROVIDERS, key.Bytes(), 0)
 	resp, err := dht.sendRequest(ctx, p, pmes)
 	switch err {
 	case nil:
@@ -403,7 +336,7 @@ func (dht *IpfsDHT) nearestPeersToQuery(pmes *pb.Message, count int) []peer.ID {
 	return closer
 }
 
-// betterPeersToQuery returns nearestPeersToQuery with some additional filtering
+// betterPeersToQuery returns nearestPeersToQuery, but if and only if closer than self.
 func (dht *IpfsDHT) betterPeersToQuery(pmes *pb.Message, p peer.ID, count int) []peer.ID {
 	closer := dht.nearestPeersToQuery(pmes, count)
 

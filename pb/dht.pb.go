@@ -9,7 +9,6 @@ import (
 	pb "github.com/libp2p/go-libp2p-record/pb"
 	io "io"
 	math "math"
-	math_bits "math/bits"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -21,7 +20,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.GoGoProtoPackageIsVersion3 // please upgrade the proto package
+const _ = proto.GoGoProtoPackageIsVersion2 // please upgrade the proto package
 
 type Message_MessageType int32
 
@@ -133,7 +132,7 @@ func (m *Message) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_Message.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
+		n, err := m.MarshalTo(b)
 		if err != nil {
 			return nil, err
 		}
@@ -220,7 +219,7 @@ func (m *Message_Peer) XXX_Marshal(b []byte, deterministic bool) ([]byte, error)
 		return xxx_messageInfo_Message_Peer.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
+		n, err := m.MarshalTo(b)
 		if err != nil {
 			return nil, err
 		}
@@ -303,7 +302,7 @@ var fileDescriptor_616a434b24c97ff4 = []byte{
 func (m *Message) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
@@ -311,83 +310,70 @@ func (m *Message) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *Message) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *Message) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
+	var i int
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i -= len(m.XXX_unrecognized)
-		copy(dAtA[i:], m.XXX_unrecognized)
+	if m.Type != 0 {
+		dAtA[i] = 0x8
+		i++
+		i = encodeVarintDht(dAtA, i, uint64(m.Type))
 	}
-	if m.ClusterLevelRaw != 0 {
-		i = encodeVarintDht(dAtA, i, uint64(m.ClusterLevelRaw))
-		i--
-		dAtA[i] = 0x50
-	}
-	if len(m.ProviderPeers) > 0 {
-		for iNdEx := len(m.ProviderPeers) - 1; iNdEx >= 0; iNdEx-- {
-			{
-				size, err := m.ProviderPeers[iNdEx].MarshalToSizedBuffer(dAtA[:i])
-				if err != nil {
-					return 0, err
-				}
-				i -= size
-				i = encodeVarintDht(dAtA, i, uint64(size))
-			}
-			i--
-			dAtA[i] = 0x4a
-		}
-	}
-	if len(m.CloserPeers) > 0 {
-		for iNdEx := len(m.CloserPeers) - 1; iNdEx >= 0; iNdEx-- {
-			{
-				size, err := m.CloserPeers[iNdEx].MarshalToSizedBuffer(dAtA[:i])
-				if err != nil {
-					return 0, err
-				}
-				i -= size
-				i = encodeVarintDht(dAtA, i, uint64(size))
-			}
-			i--
-			dAtA[i] = 0x42
-		}
+	if len(m.Key) > 0 {
+		dAtA[i] = 0x12
+		i++
+		i = encodeVarintDht(dAtA, i, uint64(len(m.Key)))
+		i += copy(dAtA[i:], m.Key)
 	}
 	if m.Record != nil {
-		{
-			size, err := m.Record.MarshalToSizedBuffer(dAtA[:i])
+		dAtA[i] = 0x1a
+		i++
+		i = encodeVarintDht(dAtA, i, uint64(m.Record.Size()))
+		n1, err := m.Record.MarshalTo(dAtA[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n1
+	}
+	if len(m.CloserPeers) > 0 {
+		for _, msg := range m.CloserPeers {
+			dAtA[i] = 0x42
+			i++
+			i = encodeVarintDht(dAtA, i, uint64(msg.Size()))
+			n, err := msg.MarshalTo(dAtA[i:])
 			if err != nil {
 				return 0, err
 			}
-			i -= size
-			i = encodeVarintDht(dAtA, i, uint64(size))
+			i += n
 		}
-		i--
-		dAtA[i] = 0x1a
 	}
-	if len(m.Key) > 0 {
-		i -= len(m.Key)
-		copy(dAtA[i:], m.Key)
-		i = encodeVarintDht(dAtA, i, uint64(len(m.Key)))
-		i--
-		dAtA[i] = 0x12
+	if len(m.ProviderPeers) > 0 {
+		for _, msg := range m.ProviderPeers {
+			dAtA[i] = 0x4a
+			i++
+			i = encodeVarintDht(dAtA, i, uint64(msg.Size()))
+			n, err := msg.MarshalTo(dAtA[i:])
+			if err != nil {
+				return 0, err
+			}
+			i += n
+		}
 	}
-	if m.Type != 0 {
-		i = encodeVarintDht(dAtA, i, uint64(m.Type))
-		i--
-		dAtA[i] = 0x8
+	if m.ClusterLevelRaw != 0 {
+		dAtA[i] = 0x50
+		i++
+		i = encodeVarintDht(dAtA, i, uint64(m.ClusterLevelRaw))
 	}
-	return len(dAtA) - i, nil
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	return i, nil
 }
 
 func (m *Message_Peer) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
@@ -395,53 +381,43 @@ func (m *Message_Peer) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *Message_Peer) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *Message_Peer) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
+	var i int
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i -= len(m.XXX_unrecognized)
-		copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	if m.Connection != 0 {
-		i = encodeVarintDht(dAtA, i, uint64(m.Connection))
-		i--
-		dAtA[i] = 0x18
+	if len(m.Id) > 0 {
+		dAtA[i] = 0xa
+		i++
+		i = encodeVarintDht(dAtA, i, uint64(len(m.Id)))
+		i += copy(dAtA[i:], m.Id)
 	}
 	if len(m.Addrs) > 0 {
-		for iNdEx := len(m.Addrs) - 1; iNdEx >= 0; iNdEx-- {
-			i -= len(m.Addrs[iNdEx])
-			copy(dAtA[i:], m.Addrs[iNdEx])
-			i = encodeVarintDht(dAtA, i, uint64(len(m.Addrs[iNdEx])))
-			i--
+		for _, b := range m.Addrs {
 			dAtA[i] = 0x12
+			i++
+			i = encodeVarintDht(dAtA, i, uint64(len(b)))
+			i += copy(dAtA[i:], b)
 		}
 	}
-	if len(m.Id) > 0 {
-		i -= len(m.Id)
-		copy(dAtA[i:], m.Id)
-		i = encodeVarintDht(dAtA, i, uint64(len(m.Id)))
-		i--
-		dAtA[i] = 0xa
+	if m.Connection != 0 {
+		dAtA[i] = 0x18
+		i++
+		i = encodeVarintDht(dAtA, i, uint64(m.Connection))
 	}
-	return len(dAtA) - i, nil
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	return i, nil
 }
 
 func encodeVarintDht(dAtA []byte, offset int, v uint64) int {
-	offset -= sovDht(v)
-	base := offset
 	for v >= 1<<7 {
 		dAtA[offset] = uint8(v&0x7f | 0x80)
 		v >>= 7
 		offset++
 	}
 	dAtA[offset] = uint8(v)
-	return base
+	return offset + 1
 }
 func (m *Message) Size() (n int) {
 	if m == nil {
@@ -507,7 +483,14 @@ func (m *Message_Peer) Size() (n int) {
 }
 
 func sovDht(x uint64) (n int) {
-	return (math_bits.Len64(x|1) + 6) / 7
+	for {
+		n++
+		x >>= 7
+		if x == 0 {
+			break
+		}
+	}
+	return n
 }
 func sozDht(x uint64) (n int) {
 	return sovDht(uint64((x << 1) ^ uint64((int64(x) >> 63))))
@@ -884,7 +867,6 @@ func (m *Message_Peer) Unmarshal(dAtA []byte) error {
 func skipDht(dAtA []byte) (n int, err error) {
 	l := len(dAtA)
 	iNdEx := 0
-	depth := 0
 	for iNdEx < l {
 		var wire uint64
 		for shift := uint(0); ; shift += 7 {
@@ -916,8 +898,10 @@ func skipDht(dAtA []byte) (n int, err error) {
 					break
 				}
 			}
+			return iNdEx, nil
 		case 1:
 			iNdEx += 8
+			return iNdEx, nil
 		case 2:
 			var length int
 			for shift := uint(0); ; shift += 7 {
@@ -941,27 +925,52 @@ func skipDht(dAtA []byte) (n int, err error) {
 			if iNdEx < 0 {
 				return 0, ErrInvalidLengthDht
 			}
+			return iNdEx, nil
 		case 3:
-			depth++
-		case 4:
-			if depth == 0 {
-				return 0, ErrUnexpectedEndOfGroupDht
+			for {
+				var innerWire uint64
+				var start int = iNdEx
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return 0, ErrIntOverflowDht
+					}
+					if iNdEx >= l {
+						return 0, io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					innerWire |= (uint64(b) & 0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				innerWireType := int(innerWire & 0x7)
+				if innerWireType == 4 {
+					break
+				}
+				next, err := skipDht(dAtA[start:])
+				if err != nil {
+					return 0, err
+				}
+				iNdEx = start + next
+				if iNdEx < 0 {
+					return 0, ErrInvalidLengthDht
+				}
 			}
-			depth--
+			return iNdEx, nil
+		case 4:
+			return iNdEx, nil
 		case 5:
 			iNdEx += 4
+			return iNdEx, nil
 		default:
 			return 0, fmt.Errorf("proto: illegal wireType %d", wireType)
 		}
-		if depth == 0 {
-			return iNdEx, nil
-		}
 	}
-	return 0, io.ErrUnexpectedEOF
+	panic("unreachable")
 }
 
 var (
-	ErrInvalidLengthDht        = fmt.Errorf("proto: negative length found during unmarshaling")
-	ErrIntOverflowDht          = fmt.Errorf("proto: integer overflow")
-	ErrUnexpectedEndOfGroupDht = fmt.Errorf("proto: unexpected end of group")
+	ErrInvalidLengthDht = fmt.Errorf("proto: negative length found during unmarshaling")
+	ErrIntOverflowDht   = fmt.Errorf("proto: integer overflow")
 )

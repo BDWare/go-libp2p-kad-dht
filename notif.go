@@ -1,8 +1,6 @@
 package dht
 
 import (
-	"context"
-
 	"github.com/libp2p/go-libp2p-core/helpers"
 	"github.com/libp2p/go-libp2p-core/network"
 
@@ -34,14 +32,7 @@ func (nn *netNotifiee) Connected(n network.Network, v network.Conn) {
 		dht.plk.Lock()
 		defer dht.plk.Unlock()
 		if dht.host.Network().Connectedness(p) == network.Connected {
-			refresh := dht.routingTable.Size() <= minRTRefreshThreshold
 			dht.Update(dht.Context(), p)
-			if refresh && dht.autoRefresh {
-				select {
-				case dht.triggerRtRefresh <- nil:
-				default:
-				}
-			}
 		}
 		return
 	}
@@ -80,14 +71,7 @@ func (nn *netNotifiee) testConnection(v network.Conn) {
 	dht.plk.Lock()
 	defer dht.plk.Unlock()
 	if dht.host.Network().Connectedness(p) == network.Connected {
-		refresh := dht.routingTable.Size() <= minRTRefreshThreshold
 		dht.Update(dht.Context(), p)
-		if refresh && dht.autoRefresh {
-			select {
-			case dht.triggerRtRefresh <- nil:
-			default:
-			}
-		}
 	}
 }
 
@@ -111,16 +95,6 @@ func (nn *netNotifiee) Disconnected(n network.Network, v network.Conn) {
 	}
 
 	dht.routingTable.Remove(p)
-	if dht.routingTable.Size() < minRTRefreshThreshold {
-		// TODO: Actively bootstrap. For now, just try to add the currently connected peers.
-		for _, p := range dht.host.Network().Peers() {
-			// Don't bother probing, we do that on connect.
-			protos, err := dht.peerstore.SupportsProtocols(p, dht.protocolStrs()...)
-			if err == nil && len(protos) != 0 {
-				dht.Update(dht.Context(), p)
-			}
-		}
-	}
 
 	dht.smlk.Lock()
 	defer dht.smlk.Unlock()
@@ -132,7 +106,7 @@ func (nn *netNotifiee) Disconnected(n network.Network, v network.Conn) {
 
 	// Do this asynchronously as ms.lk can block for a while.
 	go func() {
-		ms.lk.Lock(context.Background())
+		ms.lk.Lock()
 		defer ms.lk.Unlock()
 		ms.invalidate()
 	}()

@@ -13,43 +13,37 @@ import (
 	pstore "github.com/libp2p/go-libp2p-peerstore"
 
 	"github.com/gogo/protobuf/proto"
+	"github.com/ipfs/go-cid"
 	ds "github.com/ipfs/go-datastore"
 	u "github.com/ipfs/go-ipfs-util"
 	pb "github.com/libp2p/go-libp2p-kad-dht/pb"
 	recpb "github.com/libp2p/go-libp2p-record/pb"
-	"github.com/multiformats/go-base32"
+	"github.com/whyrusleeping/base32"
 )
+
+// The number of closer peers to send on requests.
+var CloserPeerCount = KValue
 
 // dhthandler specifies the signature of functions that handle DHT messages.
 type dhtHandler func(context.Context, peer.ID, *pb.Message) (*pb.Message, error)
 
 func (dht *IpfsDHT) handlerForMsgType(t pb.Message_MessageType) dhtHandler {
 	switch t {
+	case pb.Message_GET_VALUE:
+		return dht.handleGetValue
+	case pb.Message_PUT_VALUE:
+		return dht.handlePutValue
 	case pb.Message_FIND_NODE:
 		return dht.handleFindPeer
+	case pb.Message_ADD_PROVIDER:
+		return dht.handleAddProvider
+	case pb.Message_GET_PROVIDERS:
+		return dht.handleGetProviders
 	case pb.Message_PING:
 		return dht.handlePing
+	default:
+		return nil
 	}
-
-	if dht.enableValues {
-		switch t {
-		case pb.Message_GET_VALUE:
-			return dht.handleGetValue
-		case pb.Message_PUT_VALUE:
-			return dht.handlePutValue
-		}
-	}
-
-	if dht.enableProviders {
-		switch t {
-		case pb.Message_ADD_PROVIDER:
-			return dht.handleAddProvider
-		case pb.Message_GET_PROVIDERS:
-			return dht.handleGetProviders
-		}
-	}
-
-	return nil
 }
 
 func (dht *IpfsDHT) handleGetValue(ctx context.Context, p peer.ID, pmes *pb.Message) (_ *pb.Message, err error) {
@@ -75,7 +69,7 @@ func (dht *IpfsDHT) handleGetValue(ctx context.Context, p peer.ID, pmes *pb.Mess
 	resp.Record = rec
 
 	// Find closest peer on given cluster to desired key and reply with that info
-	closer := dht.betterPeersToQuery(pmes, p, dht.bucketSize)
+	closer := dht.betterPeersToQuery(pmes, p, CloserPeerCount)
 	if len(closer) > 0 {
 		// TODO: pstore.PeerInfos should move to core (=> peerstore.AddrInfos).
 		closerinfos := pstore.PeerInfos(dht.peerstore, closer)
@@ -127,7 +121,7 @@ func (dht *IpfsDHT) checkLocalDatastore(k []byte) (*recpb.Record, error) {
 		recordIsBad = true
 	}
 
-	if time.Since(recvtime) > dht.maxRecordAge {
+	if time.Since(recvtime) > MaxRecordAge {
 		logger.Debug("old record found, tossing.")
 		recordIsBad = true
 	}
@@ -271,7 +265,7 @@ func (dht *IpfsDHT) handleFindPeer(ctx context.Context, p peer.ID, pmes *pb.Mess
 	if targetPid == dht.self {
 		closest = []peer.ID{dht.self}
 	} else {
-		closest = dht.betterPeersToQuery(pmes, p, dht.bucketSize)
+		closest = dht.betterPeersToQuery(pmes, p, CloserPeerCount)
 
 		// Never tell a peer about itself.
 		if targetPid != p {
@@ -298,6 +292,8 @@ func (dht *IpfsDHT) handleFindPeer(ctx context.Context, p peer.ID, pmes *pb.Mess
 
 	// TODO: pstore.PeerInfos should move to core (=> peerstore.AddrInfos).
 	closestinfos := pstore.PeerInfos(dht.peerstore, closest)
+	logger.Debug("[nat] self:", dht.peerstore.PeerInfo(dht.self))
+	logger.Debug("[nat]", p, closestinfos)
 	// possibly an over-allocation but this array is temporary anyways.
 	withAddresses := make([]peer.AddrInfo, 0, len(closestinfos))
 	for _, pi := range closestinfos {
@@ -316,26 +312,26 @@ func (dht *IpfsDHT) handleGetProviders(ctx context.Context, p peer.ID, pmes *pb.
 	logger.SetTag(ctx, "peer", p)
 
 	resp := pb.NewMessage(pmes.GetType(), pmes.GetKey(), pmes.GetClusterLevel())
-	key := pmes.GetKey()
-	if len(key) > 80 {
-		return nil, fmt.Errorf("handleGetProviders key size too large")
+	c, err := cid.Cast([]byte(pmes.GetKey()))
+	if err != nil {
+		return nil, err
 	}
-	logger.SetTag(ctx, "key", key)
+	logger.SetTag(ctx, "key", c)
 
 	// debug logging niceness.
-	reqDesc := fmt.Sprintf("%s handleGetProviders(%s, %s): ", dht.self, p, key)
+	reqDesc := fmt.Sprintf("%s handleGetProviders(%s, %s): ", dht.self, p, c)
 	logger.Debugf("%s begin", reqDesc)
 	defer logger.Debugf("%s end", reqDesc)
 
 	// check if we have this value, to add ourselves as provider.
-	has, err := dht.datastore.Has(convertToDsKey(key))
+	has, err := dht.datastore.Has(convertToDsKey(c.Bytes()))
 	if err != nil && err != ds.ErrNotFound {
 		logger.Debugf("unexpected datastore error: %v\n", err)
 		has = false
 	}
 
 	// setup providers
-	providers := dht.ProviderManager.GetProviders(ctx, key)
+	providers := dht.providers.GetProviders(ctx, c)
 	if has {
 		providers = append(providers, dht.self)
 		logger.Debugf("%s have the value. added self as provider", reqDesc)
@@ -349,7 +345,7 @@ func (dht *IpfsDHT) handleGetProviders(ctx context.Context, p peer.ID, pmes *pb.
 	}
 
 	// Also send closer peers.
-	closer := dht.betterPeersToQuery(pmes, p, dht.bucketSize)
+	closer := dht.betterPeersToQuery(pmes, p, CloserPeerCount)
 	if closer != nil {
 		// TODO: pstore.PeerInfos should move to core (=> peerstore.AddrInfos).
 		infos := pstore.PeerInfos(dht.peerstore, closer)
@@ -365,13 +361,13 @@ func (dht *IpfsDHT) handleAddProvider(ctx context.Context, p peer.ID, pmes *pb.M
 	defer func() { logger.FinishWithErr(ctx, _err) }()
 	logger.SetTag(ctx, "peer", p)
 
-	key := pmes.GetKey()
-	if len(key) > 80 {
-		return nil, fmt.Errorf("handleAddProviders key size too large")
+	c, err := cid.Cast([]byte(pmes.GetKey()))
+	if err != nil {
+		return nil, err
 	}
-	logger.SetTag(ctx, "key", key)
+	logger.SetTag(ctx, "key", c)
 
-	logger.Debugf("%s adding %s as a provider for '%s'\n", dht.self, p, key)
+	logger.Debugf("%s adding %s as a provider for '%s'\n", dht.self, p, c)
 
 	// add provider should use the address given in the message
 	pinfos := pb.PBPeersToPeerInfos(pmes.GetProviderPeers())
@@ -388,12 +384,12 @@ func (dht *IpfsDHT) handleAddProvider(ctx context.Context, p peer.ID, pmes *pb.M
 			continue
 		}
 
-		logger.Debugf("received provider %s for %s (addrs: %s)", p, key, pi.Addrs)
+		logger.Debugf("received provider %s for %s (addrs: %s)", p, c, pi.Addrs)
 		if pi.ID != dht.self { // don't add own addrs.
 			// add the received addresses to our peerstore.
 			dht.peerstore.AddAddrs(pi.ID, pi.Addrs, peerstore.ProviderAddrTTL)
 		}
-		dht.ProviderManager.AddProvider(ctx, key, p)
+		dht.providers.AddProvider(ctx, c, p)
 	}
 
 	return nil, nil

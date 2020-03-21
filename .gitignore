@@ -1,0 +1,35 @@
+# Go
+/vendor/
+
+# Executable
+debug
+debug.test
+
+/*.exe
+/datachain
+/datachain.exe
+/output
+/output.exe
+/input
+/input.exe
+/robot
+/robot.exe
+/timemachine
+/timemachine.exe
+/benchmark
+/benchmark.exe
+
+# IDE
+.idea/
+.vscode/
+
+# Generated
+/data
+/cache
+/log
+
+# Deploy
+.script/
+
+# cmd
+/pkg/p2p/cmd/

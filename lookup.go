@@ -8,13 +8,11 @@ import (
 
 	"github.com/libp2p/go-libp2p-core/peer"
 
-	"github.com/ipfs/go-cid"
+	cid "github.com/ipfs/go-cid"
 	logging "github.com/ipfs/go-log"
 	pb "github.com/libp2p/go-libp2p-kad-dht/pb"
 	kb "github.com/libp2p/go-libp2p-kbucket"
 	notif "github.com/libp2p/go-libp2p-routing/notifications"
-	"github.com/multiformats/go-base32"
-	"github.com/multiformats/go-multihash"
 )
 
 func tryFormatLoggableKey(k string) (string, error) {
@@ -35,15 +33,11 @@ func tryFormatLoggableKey(k string) (string, error) {
 		cstr = k
 	}
 
-	var encStr string
 	c, err := cid.Cast([]byte(cstr))
-	if err == nil {
-		encStr = c.String()
-	} else {
-		encStr = base32.RawStdEncoding.EncodeToString([]byte(cstr))
+	if err != nil {
+		return "", fmt.Errorf("loggableKey could not cast key to a CID: %x %v", k, err)
 	}
-
-	return fmt.Sprintf("/%s/%s", proto, encStr), nil
+	return fmt.Sprintf("/%s/%s", proto, c.String()), nil
 }
 
 func loggableKey(k string) logging.LoggableMap {
@@ -59,12 +53,6 @@ func loggableKey(k string) logging.LoggableMap {
 	}
 }
 
-func multihashLoggableKey(mh multihash.Multihash) logging.LoggableMap {
-	return logging.LoggableMap{
-		"multihash": base32.RawStdEncoding.EncodeToString(mh),
-	}
-}
-
 // Kademlia 'node lookup' operation. Returns a channel of the K closest peers
 // to the given key
 func (dht *IpfsDHT) GetClosestPeers(ctx context.Context, key string) (<-chan peer.ID, error) {
@@ -74,7 +62,7 @@ func (dht *IpfsDHT) GetClosestPeers(ctx context.Context, key string) (<-chan pee
 		return nil, kb.ErrLookupFailure
 	}
 
-	out := make(chan peer.ID, dht.bucketSize)
+	out := make(chan peer.ID, KValue)
 
 	// since the query doesnt actually pass our context down
 	// we have to hack this here. whyrusleeping isnt a huge fan of goprocess
@@ -115,13 +103,9 @@ func (dht *IpfsDHT) GetClosestPeers(ctx context.Context, key string) (<-chan pee
 		}
 
 		if res != nil && res.queriedSet != nil {
-			// refresh the cpl for this key as the query was successful
-			dht.routingTable.ResetCplRefreshedAtForID(kb.ConvertKey(key), time.Now())
-
 			sorted := kb.SortClosestPeers(res.queriedSet.Peers(), kb.ConvertKey(key))
-			l := len(sorted)
-			if l > dht.bucketSize {
-				sorted = sorted[:dht.bucketSize]
+			if len(sorted) > KValue {
+				sorted = sorted[:KValue]
 			}
 
 			for _, p := range sorted {
