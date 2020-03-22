@@ -1,5 +1,7 @@
 bdware.org/libp2p/go-libp2p-kbucket v0.2.3-bdw h1:tWwWREOFStluMxEmnte+04KMWV2I5fRgwyQnXQsP1Dk=
 bdware.org/libp2p/go-libp2p-kbucket v0.2.3-bdw/go.mod h1:19O+/KY3nHOXY7KiLRDyi0BA9lFT9xCIZiCJcu7SuRc=
+bdware.org/libp2p/go-libp2p-kbucket v0.2.3-bdw1 h1:AHUpD1Y1IUgc8KW+JBraqLfXiKRRi9+7ZvO1x8OvNic=
+bdware.org/libp2p/go-libp2p-kbucket v0.2.3-bdw1/go.mod h1:LAGjCPHZf5fuHie72lTWb/Vy93XOsi+si9709CcufXY=
 cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 github.com/AndreasBriese/bbloom v0.0.0-20180913140656-343706a395b7/go.mod h1:bOvUY6CB00SOBii9/FifXqc0awNKxLFCL/+pkDPuyl8=
 github.com/AndreasBriese/bbloom v0.0.0-20190306092124-e2d15f34fcf9/go.mod h1:bOvUY6CB00SOBii9/FifXqc0awNKxLFCL/+pkDPuyl8=
