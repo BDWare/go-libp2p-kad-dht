@@ -36,7 +36,12 @@ Small note: If editing the README, please conform to the [standard-readme](https
 
 ## License
 
-[MIT](LICENSE) © Protocol Labs Inc.
+Copyright for portions of this fork are held by [Protocol Labs Inc., 2016] as
+part of the original [go-libp2p-kad-dht](https://github.com/libp2p/go-libp2p-kad-dht) project.
+
+All other copyright for this fork are held by [The BDWare Authors, 2020].
+
+All rights reserved.
 
 ---
 

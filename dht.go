@@ -1,3 +1,9 @@
+// Copyright for portions of this fork are held by [Protocol Labs, Inc., 2016] as
+// part of the original go-libp2p-kad-dht project. All other copyright for
+// this fork are held by [The BDWare Authors, 2020]. All rights reserved.
+// Use of this source code is governed by MIT license that can be
+// found in the LICENSE file.
+
 package dht
 
 import (
@@ -343,7 +349,10 @@ func (dht *IpfsDHT) putLocal(key string, rec *recpb.Record) error {
 // on the given peer.
 func (dht *IpfsDHT) Update(ctx context.Context, p peer.ID) {
 	logger.Event(ctx, "updatePeer", p)
-	dht.routingTable.Update(p)
+	_, err := dht.routingTable.Update(p)
+	if err == nil {
+		dht.host.ConnManager().Protect(p, "routingTable")
+	}
 }
 
 // FindLocal looks for a peer with a given ID connected to this dht and returns the peer and the table it was found in.

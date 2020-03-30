@@ -1,0 +1,40 @@
+{
+  "exclude": [
+    "(\\.gitmodules$)",
+    "(^go\\.(mod|sum)$)"
+  ],
+  "linters": {
+    "chmod": {
+      "type": "chmod"
+    },
+    "Filename": {
+      "type": "filename"
+     },
+    "golint": {
+      "type": "golint",
+      "include": "(\\.go$)"
+    },
+    "gofmt": {
+      "type": "gofmt",
+      "include": "(\\.go$)"
+    },
+    "govet": {
+      "type": "govet",
+      "include": "(\\.go$)"
+    },
+    "JSON": {
+      "type": "json",
+      "include": "(\\.json$)"
+    },
+    "Merge Conflicts": {
+      "type": "merge-conflict"
+    },
+    "Spelling": {
+      "type": "spelling"
+    },
+    "Text": {
+      "type": "text",
+      "exclude": ["(\\.(arclint|go|html|md|proto)$)"]
+    }
+  }
+}

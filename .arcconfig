@@ -1,0 +1,9 @@
+{
+  "load": [
+    "pinterest-linters",
+    "arcanist-go"
+  ],
+  "phabricator.uri": "https://phabricator.internetapi.cn/",
+  "history.immutable": true,
+  "unit.engine": "GoTestEngine"
+}

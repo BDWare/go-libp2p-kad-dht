@@ -1,3 +1,9 @@
+// Copyright for portions of this fork are held by [Protocol Labs, Inc., 2016] as
+// part of the original go-libp2p-kad-dht project. All other copyright for
+// this fork are held by [The BDWare Authors, 2020]. All rights reserved.
+// Use of this source code is governed by MIT license that can be
+// found in the LICENSE file.
+
 package dht
 
 import (
@@ -111,6 +117,7 @@ func (nn *netNotifiee) Disconnected(n network.Network, v network.Conn) {
 	}
 
 	dht.routingTable.Remove(p)
+	dht.host.ConnManager().Unprotect(p, "routingTable")
 	if dht.routingTable.Size() < minRTRefreshThreshold {
 		// TODO: Actively bootstrap. For now, just try to add the currently connected peers.
 		for _, p := range dht.host.Network().Peers() {
