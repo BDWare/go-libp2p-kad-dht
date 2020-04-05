@@ -161,10 +161,18 @@ func makeDHT(ctx context.Context, h host.Host, cfg *opts.Options) *IpfsDHT {
 	rt.PeerAdded = func(p peer.ID) {
 		commonPrefixLen := kb.CommonPrefixLen(self, kb.ConvertPeerID(p))
 		cmgr.TagPeer(p, "kbucket", BaseConnMgrScore+commonPrefixLen)
+		// #BDWare
+		if cfg.ProtectRoutingTable {
+			cmgr.Protect(p, "kbucket")
+		}
 	}
 
 	rt.PeerRemoved = func(p peer.ID) {
 		cmgr.UntagPeer(p, "kbucket")
+		// #BDWare
+		if cfg.ProtectRoutingTable {
+			cmgr.Unprotect(p, "kbucket")
+		}
 	}
 
 	dht := &IpfsDHT{
@@ -349,10 +357,7 @@ func (dht *IpfsDHT) putLocal(key string, rec *recpb.Record) error {
 // on the given peer.
 func (dht *IpfsDHT) Update(ctx context.Context, p peer.ID) {
 	logger.Event(ctx, "updatePeer", p)
-	_, err := dht.routingTable.Update(p)
-	if err == nil {
-		dht.host.ConnManager().Protect(p, "routingTable")
-	}
+	dht.routingTable.Update(p)
 }
 
 // FindLocal looks for a peer with a given ID connected to this dht and returns the peer and the table it was found in.

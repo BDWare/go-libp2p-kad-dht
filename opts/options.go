@@ -1,3 +1,9 @@
+// Copyright for portions of this fork are held by [Protocol Labs, Inc., 2016] as
+// part of the original go-libp2p-kad-dht project. All other copyright for
+// this fork are held by [The BDWare Authors, 2020]. All rights reserved.
+// Use of this source code is governed by MIT license that can be
+// found in the LICENSE file.
+
 package dhtopts
 
 import (
@@ -29,6 +35,8 @@ type Options struct {
 	MaxRecordAge    time.Duration
 	EnableProviders bool
 	EnableValues    bool
+	// #BDWare
+	ProtectRoutingTable bool
 
 	RoutingTable struct {
 		RefreshQueryTimeout time.Duration
@@ -61,6 +69,8 @@ var Defaults = func(o *Options) error {
 	o.Protocols = DefaultProtocols
 	o.EnableProviders = true
 	o.EnableValues = true
+	// #BDWare
+	o.ProtectRoutingTable = false
 
 	o.RoutingTable.LatencyTolerance = time.Minute
 	o.RoutingTable.RefreshQueryTimeout = 10 * time.Second
@@ -216,6 +226,18 @@ func DisableProviders() Option {
 func DisableValues() Option {
 	return func(o *Options) error {
 		o.EnableValues = false
+		return nil
+	}
+}
+
+// ProtectRoutingTable enable routing table protection.
+//
+// Defaults to disabled.
+//
+// #BDWare
+func ProtectRoutingTable() Option {
+	return func(o *Options) error {
+		o.ProtectRoutingTable = true
 		return nil
 	}
 }

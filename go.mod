@@ -17,6 +17,7 @@ require (
 	github.com/ipfs/go-todocounter v0.0.2
 	github.com/jbenet/goprocess v0.1.3
 	github.com/libp2p/go-libp2p v0.5.2
+	github.com/libp2p/go-libp2p-connmgr v0.2.1
 	github.com/libp2p/go-libp2p-core v0.3.1
 	github.com/libp2p/go-libp2p-kad-dht v0.0.0-00010101000000-000000000000
 	github.com/libp2p/go-libp2p-kbucket v0.2.3

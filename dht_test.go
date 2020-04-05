@@ -1,3 +1,9 @@
+// Copyright for portions of this fork are held by [Protocol Labs, Inc., 2016] as
+// part of the original go-libp2p-kad-dht project. All other copyright for
+// this fork are held by [The BDWare Authors, 2020]. All rights reserved.
+// Use of this source code is governed by MIT license that can be
+// found in the LICENSE file.
+
 package dht
 
 import (
@@ -13,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/peerstore"
 	"github.com/libp2p/go-libp2p-core/routing"
@@ -29,6 +36,7 @@ import (
 
 	"github.com/ipfs/go-cid"
 	u "github.com/ipfs/go-ipfs-util"
+	"github.com/libp2p/go-libp2p-connmgr"
 	kb "github.com/libp2p/go-libp2p-kbucket"
 	record "github.com/libp2p/go-libp2p-record"
 	swarmt "github.com/libp2p/go-libp2p-swarm/testing"
@@ -1756,4 +1764,64 @@ func TestClientModeAtInit(t *testing.T) {
 	pinger.Host().Peerstore().AddAddrs(client.PeerID(), client.Host().Addrs(), peerstore.AddressTTL)
 	err := pinger.Ping(context.Background(), client.PeerID())
 	assert.True(t, xerrors.Is(err, multistream.ErrNotSupported))
+}
+
+// #BDWare
+func TestProtectRoutingTable(t *testing.T) {
+	t.Run("Default to unprotected, peers should not be protected", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		h, err := libp2p.New(ctx, libp2p.ConnectionManager(connmgr.NewConnManager(
+			100,         // Lowwater
+			400,         // HighWater,
+			time.Minute, // GracePeriod
+		)))
+		dhtA, err := New(ctx, h)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		dhtB := setupDHT(ctx, t, false)
+		pidB := dhtB.self
+
+		if protected := h.ConnManager().Unprotect(pidB, "randomTag"); protected == true {
+			t.Fatal("Expected a peer not in the routing table to be not protected")
+		}
+		dhtA.Update(ctx, pidB)
+		if protected := h.ConnManager().Unprotect(pidB, "randomTag"); protected == true {
+			t.Fatal("Expected a peer in the routing table to be not protected")
+		}
+	})
+
+	t.Run("With ProtectRoutingTable set, peers in the routing table should be protected", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		h, err := libp2p.New(ctx, libp2p.ConnectionManager(connmgr.NewConnManager(
+			100,         // Lowwater
+			400,         // HighWater,
+			time.Minute, // GracePeriod
+		)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		dhtA, err := New(ctx, h, []opts.Option{
+			opts.ProtectRoutingTable(),
+		}...)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		dhtB := setupDHT(ctx, t, false)
+		pidB := dhtB.self
+
+		if protected := h.ConnManager().Unprotect(pidB, "randomTag"); protected == true {
+			t.Fatal("Expected a peer not in the routing table to be not protected")
+		}
+		dhtA.Update(ctx, pidB)
+		if protected := h.ConnManager().Unprotect(pidB, "randomTag"); protected == false {
+			t.Fatal("Expected a peer in the routing table to be protected")
+		}
+	})
 }
