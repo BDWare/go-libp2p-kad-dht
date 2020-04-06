@@ -110,7 +110,7 @@ func (nn *netNotifiee) Disconnected(n network.Network, v network.Conn) {
 		return
 	}
 
-	dht.routingTable.Remove(p)
+	dht.routingTable.HandlePeerDisconnect(p)
 	if dht.routingTable.Size() < minRTRefreshThreshold {
 		// TODO: Actively bootstrap. For now, just try to add the currently connected peers.
 		for _, p := range dht.host.Network().Peers() {

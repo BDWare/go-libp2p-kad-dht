@@ -106,7 +106,10 @@ func New(ctx context.Context, h host.Host, options ...opts.Option) (*IpfsDHT, er
 	if err := cfg.Apply(append([]opts.Option{opts.Defaults}, options...)...); err != nil {
 		return nil, err
 	}
-	dht := makeDHT(ctx, h, &cfg)
+	dht, err := makeDHT(ctx, h, &cfg)
+	if err != nil {
+		return nil, err
+	}
 	dht.autoRefresh = cfg.RoutingTable.AutoRefresh
 	dht.rtRefreshPeriod = cfg.RoutingTable.RefreshPeriod
 	dht.rtRefreshQueryTimeout = cfg.RoutingTable.RefreshQueryTimeout
@@ -153,9 +156,12 @@ func NewDHTClient(ctx context.Context, h host.Host, dstore ds.Batching) *IpfsDHT
 	return dht
 }
 
-func makeDHT(ctx context.Context, h host.Host, cfg *opts.Options) *IpfsDHT {
+func makeDHT(ctx context.Context, h host.Host, cfg *opts.Options) (*IpfsDHT, error) {
 	self := kb.ConvertPeerID(h.ID())
-	rt := kb.NewRoutingTable(cfg.BucketSize, self, cfg.RoutingTable.LatencyTolerance, h.Peerstore())
+	rt, err := kb.NewRoutingTable(cfg.BucketSize, self, cfg.RoutingTable.LatencyTolerance, h.Peerstore())
+	if err != nil {
+		return nil, err
+	}
 	cmgr := h.ConnManager()
 
 	rt.PeerAdded = func(p peer.ID) {
@@ -202,7 +208,7 @@ func makeDHT(ctx context.Context, h host.Host, cfg *opts.Options) *IpfsDHT {
 
 	dht.ProviderManager = providers.NewProviderManager(dht.ctx, h.ID(), cfg.Datastore)
 
-	return dht
+	return dht, nil
 }
 
 // TODO Implement RT seeding as described in https://github.com/libp2p/go-libp2p-kad-dht/pull/384#discussion_r320994340 OR
@@ -357,7 +363,7 @@ func (dht *IpfsDHT) putLocal(key string, rec *recpb.Record) error {
 // on the given peer.
 func (dht *IpfsDHT) Update(ctx context.Context, p peer.ID) {
 	logger.Event(ctx, "updatePeer", p)
-	dht.routingTable.Update(p)
+	dht.routingTable.HandlePeerAlive(p)
 }
 
 // FindLocal looks for a peer with a given ID connected to this dht and returns the peer and the table it was found in.
