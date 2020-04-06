@@ -1,6 +1,10 @@
-module github.com/libp2p/go-libp2p-kad-dht
+module github.com/bdware/go-libp2p-kad-dht
 
-go 1.12
+go 1.14
+
+replace github.com/libp2p/go-libp2p-kad-dht => ./
+
+replace github.com/libp2p/go-libp2p-kbucket => ../go-libp2p-kbucket
 
 require (
 	github.com/gogo/protobuf v1.3.1
@@ -14,7 +18,8 @@ require (
 	github.com/jbenet/goprocess v0.1.3
 	github.com/libp2p/go-libp2p v0.5.2
 	github.com/libp2p/go-libp2p-core v0.3.1
-	github.com/libp2p/go-libp2p-kbucket v0.2.3
+	github.com/libp2p/go-libp2p-kad-dht v0.5.2
+	github.com/libp2p/go-libp2p-kbucket v0.3.2
 	github.com/libp2p/go-libp2p-peerstore v0.1.4
 	github.com/libp2p/go-libp2p-record v0.1.2
 	github.com/libp2p/go-libp2p-routing v0.1.0

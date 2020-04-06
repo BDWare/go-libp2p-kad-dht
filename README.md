@@ -21,6 +21,12 @@ Fork of [libp2p/go-libp2p-kad-dht](https://github.com/libp2p/go-libp2p-kad-dht) 
 go get github.com/bdware/go-libp2p-kad-dht
 ```
 
+Add the following lines to your `go.mod`:
+```
+replace github.com/libp2p/go-libp2p-kad-dht => github.com/bdware/go-libp2p-kad-dht {{KAD_DHT_VERSION}}
+replace github.com/libp2p/go-libp2p-kbucket => github.com/bdware/go-libp2p-kbucket {{KBUCKET_VERSION}}
+```
+
 ## Usage
 
 See [API documentation](https://pkg.go.dev/github.com/bdware/go-libp2p-kad-dht).
